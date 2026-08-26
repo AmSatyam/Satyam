@@ -1,5 +1,5 @@
 import React from 'react'
-import Heropage from "../copmonents/_components/Heropage";
+import Heropage from "../components/_components/Heropage";
 
 const page = () => {
   return (
