@@ -1,6 +1,7 @@
 "use client";
 
-import { useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { motion, useScroll, useTransform, useReducedMotion } from "framer-motion";
 import Typography from "@/components/utils/Typography";
 import BrandTagline from "./Hero/BrandTagline";
@@ -10,8 +11,42 @@ import { STACK_LAYERS } from "./Hero/scene.palette";
 
 const Heropage = () => {
   const ref = useRef<HTMLElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   const prefersReducedMotion = useReducedMotion();
   const reduceMotion = Boolean(prefersReducedMotion);
+
+  /**
+   * The glass panel's vertical span as a fraction of the hero, which is the
+   * canvas's own box. The scene uses it as the invisible container the stack
+   * floats inside: the slabs already sit well within it, but the drifting
+   * cubes would otherwise rise past the panel's top edge.
+   *
+   * Measured off a wrapper that carries no transform, so the panel's entrance
+   * animation and scroll parallax cannot skew the reading.
+   */
+  const [band, setBand] = useState<[number, number]>([0, 1]);
+
+  useEffect(() => {
+    const section = ref.current;
+    const panel = panelRef.current;
+    if (!section || !panel) return;
+
+    const measure = () => {
+      const hero = section.getBoundingClientRect();
+      const box = panel.getBoundingClientRect();
+      if (hero.height <= 0) return;
+      setBand([
+        (box.top - hero.top) / hero.height,
+        (box.bottom - hero.top) / hero.height,
+      ]);
+    };
+
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(section);
+    observer.observe(panel);
+    return () => observer.disconnect();
+  }, []);
 
   const { scrollYProgress } = useScroll({
     target: ref,
@@ -42,7 +77,7 @@ const Heropage = () => {
       ref={ref}
       data-theme-surface
       className="ambient-field relative isolate flex min-h-screen flex-col overflow-hidden bg-surface text-content">
-      <HeroBackdrop eventSource={ref} />
+      <HeroBackdrop eventSource={ref} band={band} />
 
       {/* --------------------------------------------------- Top bar */}
       <BrandTagline className="relative z-10 px-6 pt-6 sm:px-8 md:px-16 md:pt-8 2xl:px-26" />
@@ -62,17 +97,22 @@ const Heropage = () => {
 
       {/* --------------------------------------------------- The glass panel */}
       <div className="relative z-10 mx-auto flex w-full max-w-[1800px] flex-1 items-center px-4 py-6 sm:px-8 sm:py-10 md:px-16 2xl:px-26">
-        <motion.div
-          style={{ y: panelY, opacity: panelOpacity }}
-          initial={{ opacity: 0, y: reduceMotion ? 0 : 36 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{
-            duration: reduceMotion ? 0 : 0.9,
-            delay: reduceMotion ? 0 : 0.25,
-            ease: [0.22, 1, 0.36, 1],
-          }}
+        {/* Untransformed wrapper — the scene measures the panel's band here,
+            so the entrance animation and scroll parallax never skew it. */}
+        <div
+          ref={panelRef}
+          data-hero-panel
           className="w-full lg:max-w-[40rem] 2xl:max-w-[46rem]">
-          <GlassPanel className="rounded-2xl px-7 py-9 sm:px-10 sm:py-12 lg:rounded-3xl lg:px-14 lg:py-16 2xl:px-16 2xl:py-18">
+          <motion.div
+            style={{ y: panelY, opacity: panelOpacity }}
+            initial={{ opacity: 0, y: reduceMotion ? 0 : 36 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{
+              duration: reduceMotion ? 0 : 0.9,
+              delay: reduceMotion ? 0 : 0.25,
+              ease: [0.22, 1, 0.36, 1],
+            }}>
+            <GlassPanel className="rounded-2xl px-7 py-9 sm:px-10 sm:py-12 lg:rounded-3xl lg:px-14 lg:py-16 2xl:px-16 2xl:py-18">
             <motion.p
               initial="hidden"
               animate="show"
@@ -128,7 +168,7 @@ const Heropage = () => {
               animate="show"
               custom={0.62}
               variants={reveal}
-              className="mt-9 sm:mt-11">
+              className="mt-9 flex flex-col items-start gap-4 sm:mt-11">
               <a
                 href="#about"
                 className="group inline-flex items-center gap-3 font-mono text-[11px] tracking-[0.22em] text-content-subtle uppercase transition-colors duration-300 hover:text-content 2xl:text-xs">
@@ -138,10 +178,24 @@ const Heropage = () => {
                 />
                 Scroll to explore
               </a>
+
+              {/* The writing is a whole route away, so the hero offers it
+                  directly rather than only at the foot of the page. */}
+              <Link
+                href="/blogs"
+                className="group inline-flex items-center gap-3 font-mono text-[11px] tracking-[0.22em] text-content-subtle uppercase transition-colors duration-300 hover:text-content 2xl:text-xs">
+                <span
+                  aria-hidden
+                  className="h-px w-8 bg-content-subtle transition-all duration-500 group-hover:w-12 group-hover:bg-accent"
+                />
+                Read the writing
+              </Link>
             </motion.div>
-          </GlassPanel>
-        </motion.div>
+            </GlassPanel>
+          </motion.div>
+        </div>
       </div>
+
 
       {/* ------------------------------------- Bottom — what the stack means */}
       <motion.ol

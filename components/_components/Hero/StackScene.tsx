@@ -43,6 +43,16 @@ const SLAB_WIDTH = 2.5;
 const SLAB_DEPTH = 1.85;
 const SLAB_HEIGHT = 0.17;
 
+/** The vertical box the composition may float inside, in the stack's own units. */
+type LocalBand = { top: number; bottom: number };
+
+/**
+ * Highest point the stack itself reaches at scale 1 — the top slab at the peak
+ * of its float, plus the accent sliver riding above it. The drifters go higher
+ * still, but they are clamped rather than placed.
+ */
+const STACK_TOP = 1.29;
+
 type SlabProps = {
   config: LayerConfig;
   color: string;
@@ -138,9 +148,11 @@ const DRIFTERS: { position: [number, number, number]; size: number; speed: numbe
 const Drifters = ({
   palette,
   animate,
+  localBand,
 }: {
   palette: ScenePalette;
   animate: boolean;
+  localBand: LocalBand;
 }) => {
   const ref = useRef<Group>(null);
 
@@ -151,8 +163,18 @@ const Drifters = ({
     const t = clock.getElapsedTime();
     group.children.forEach((child, index) => {
       const drifter = DRIFTERS[index];
-      child.position.y =
+      const drift =
         drifter.position[1] + Math.sin(t * drifter.speed + index * 2) * 0.22;
+
+      // Held inside the glass panel's band, measuring from the cube's own
+      // face rather than its centre so the corner never crosses the line.
+      const margin = drifter.size * 0.87;
+      child.position.y = MathUtils.clamp(
+        drift,
+        localBand.bottom + margin,
+        localBand.top - margin,
+      );
+
       child.rotation.x = t * drifter.speed * 0.3;
       child.rotation.y = t * drifter.speed * 0.42;
     });
@@ -161,7 +183,20 @@ const Drifters = ({
   return (
     <group ref={ref}>
       {DRIFTERS.map((drifter, index) => (
-        <mesh key={index} position={drifter.position} castShadow>
+        <mesh
+          key={index}
+          position={[
+            drifter.position[0],
+            // Same cap as the animated path, so a reduced-motion visitor gets
+            // the contained composition rather than the overhanging one.
+            MathUtils.clamp(
+              drifter.position[1],
+              localBand.bottom + drifter.size * 0.87,
+              localBand.top - drifter.size * 0.87,
+            ),
+            drifter.position[2],
+          ]}
+          castShadow>
           <boxGeometry args={[drifter.size, drifter.size, drifter.size]} />
           <meshStandardMaterial
             color={palette.layers[index % palette.layers.length]}
@@ -178,9 +213,11 @@ type StackProps = {
   palette: ScenePalette;
   animate: boolean;
   trackPointer: boolean;
+  /** The glass panel's top and bottom as fractions of the canvas. */
+  band: [number, number];
 };
 
-const Stack = ({ palette, animate, trackPointer }: StackProps) => {
+const Stack = ({ palette, animate, trackPointer, band }: StackProps) => {
   const ref = useRef<Group>(null);
   const outer = useRef<Group>(null);
   const { viewport } = useThree();
@@ -194,6 +231,7 @@ const Stack = ({ palette, animate, trackPointer }: StackProps) => {
   const { offsetX, offsetY, scale } = useMemo(() => {
     const halfWidth = viewport.width / 2;
     const wide = viewport.aspect >= 1.1;
+    const bandTop = viewport.height * (0.5 - band[0]);
 
     if (!wide) {
       /*
@@ -202,10 +240,15 @@ const Stack = ({ palette, animate, trackPointer }: StackProps) => {
        * top and kept small — at tablet widths the frame is wide enough that
        * a full-size stack would drive a slab straight through the headline.
        */
+      const scale = MathUtils.clamp(halfWidth / 2.3, 0.4, 0.66);
+
       return {
         offsetX: 0,
-        offsetY: 0.7,
-        scale: MathUtils.clamp(halfWidth / 2.3, 0.4, 0.66),
+        // The lift is capped by the panel's top edge: it stays at 0.7 wherever
+        // that fits, and gives way only when it would push a slab out of the
+        // band the stack is supposed to sit inside.
+        offsetY: Math.min(0.7, bandTop - STACK_TOP * scale),
+        scale,
       };
     }
 
@@ -227,7 +270,27 @@ const Stack = ({ palette, animate, trackPointer }: StackProps) => {
       offsetY: 0.12,
       scale: MathUtils.clamp(halfWidth / 4.3, 0.55, 0.95),
     };
-  }, [viewport.width, viewport.aspect]);
+  }, [viewport.width, viewport.aspect, viewport.height, band]);
+
+  /**
+   * The glass panel's band expressed in the stack's own local units — the
+   * invisible box the composition is allowed to float inside. The slabs sit
+   * well within it at every size; it is the drifters, which travel furthest
+   * from the centre, that would otherwise rise past the panel's top edge.
+   *
+   * Nothing here resizes or repositions the stack: it only caps how far the
+   * loose pieces may wander.
+   */
+  const localBand = useMemo(() => {
+    const [topFraction, bottomFraction] = band;
+    const worldTop = viewport.height * (0.5 - topFraction);
+    const worldBottom = viewport.height * (0.5 - bottomFraction);
+
+    return {
+      top: (worldTop - offsetY) / scale,
+      bottom: (worldBottom - offsetY) / scale,
+    };
+  }, [band, viewport.height, offsetY, scale]);
 
   // Damped pointer parallax: the group leans towards the cursor and settles
   // back when it leaves. Framerate-independent via MathUtils.damp.
@@ -273,7 +336,7 @@ const Stack = ({ palette, animate, trackPointer }: StackProps) => {
           />
         ))}
         <AccentEdge palette={palette} animate={animate} />
-        <Drifters palette={palette} animate={animate} />
+        <Drifters palette={palette} animate={animate} localBand={localBand} />
       </group>
     </group>
   );
@@ -351,9 +414,11 @@ type StackSceneProps = {
    * would freeze the moment the cursor crossed onto the panel.
    */
   eventSource?: React.RefObject<HTMLElement | null>;
+  /** The glass panel's top and bottom as fractions of the hero — see Heropage. */
+  band: [number, number];
 };
 
-const StackScene = ({ eventSource }: StackSceneProps) => {
+const StackScene = ({ eventSource, band }: StackSceneProps) => {
   const theme = useTheme();
   const reduceMotion = usePrefersReducedMotion();
   const finePointer = useHasFinePointer();
@@ -384,6 +449,7 @@ const StackScene = ({ eventSource }: StackSceneProps) => {
         palette={palette}
         animate={animate}
         trackPointer={finePointer && !reduceMotion}
+        band={band}
       />
     </Canvas>
   );

@@ -88,6 +88,8 @@ const useWebGLSupport = () =>
 type HeroBackdropProps = {
   /** The hero section, used as the scene's pointer-event source. */
   eventSource: React.RefObject<HTMLElement | null>;
+  /** The glass panel's top and bottom as fractions of the hero — see Heropage. */
+  band: [number, number];
 };
 
 /**
@@ -95,7 +97,7 @@ type HeroBackdropProps = {
  * what makes the glass read as glass — the blur has real geometry to refract
  * rather than a flat background colour.
  */
-const HeroBackdrop = ({ eventSource }: HeroBackdropProps) => {
+const HeroBackdrop = ({ eventSource, band }: HeroBackdropProps) => {
   const webgl = useWebGLSupport();
 
   return (
@@ -114,7 +116,7 @@ const HeroBackdrop = ({ eventSource }: HeroBackdropProps) => {
       {webgl === false ? (
         <CssStack />
       ) : webgl === true ? (
-        <StackScene eventSource={eventSource} />
+        <StackScene eventSource={eventSource} band={band} />
       ) : null}
     </div>
   );

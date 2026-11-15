@@ -39,14 +39,27 @@ const DARK: ScenePalette = {
 };
 
 const LIGHT: ScenePalette = {
-  layers: ["#ffffff", "#f7f4ef", "#ebe5dc", "#ddd5c9"],
+  // The same problem as DARK, mirrored. Slabs tinted at page tone (#f7f5f2)
+  // clip to flat white under the key and the object dissolves into the paper,
+  // so the ramp is pitched well *below* the background instead: mid warm greys
+  // that the key still lifts to near-white across the top faces while the
+  // sides and undercuts stay dark enough to model the form.
+  // Near-neutral on purpose: the key and the accent lightformer already pour
+  // warmth over every lit face, so a ramp with much yellow left in it renders
+  // as brown clay rather than as pale stone.
+  layers: ["#d2cdc5", "#c7c1b8", "#bab3a9", "#aca498"],
   accent: "#b06c2c",
-  keyLight: { color: "#ffffff", intensity: 2.1 },
-  fillLight: { color: "#cfd8e4", intensity: 0.7 },
-  rimLight: { color: "#c67f32", intensity: 9 },
-  ambient: { color: "#f7f5f2", intensity: 1.35 },
-  material: { roughness: 0.46, metalness: 0.06 },
-  lightformer: { color: "#ffffff", intensity: 1.1 },
+  keyLight: { color: "#fffaf2", intensity: 2.6 },
+  fillLight: { color: "#cfd8e4", intensity: 0.5 },
+  rimLight: { color: "#c67f32", intensity: 10 },
+  // Kept low. A flood anywhere near the old 1.35 cancels the key, erases the
+  // slab-on-slab shadows and flattens every bevel; cool-tinted so the shadow
+  // side reads as skylight rather than as dirt on a warm surface. Not *too*
+  // low either — the lower slabs sit under three others and crush to mud
+  // without a little ambient to open them back up.
+  ambient: { color: "#dfe4ec", intensity: 0.7 },
+  material: { roughness: 0.38, metalness: 0.1 },
+  lightformer: { color: "#ffffff", intensity: 0.9 },
   shadowOpacity: 0.3,
 };
 
